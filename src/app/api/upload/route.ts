@@ -3,7 +3,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+// import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs"; // Moved to dynamic import inside extractTextFromPDF
 
 // Use the legacy build if possible for better Node support, 
 // or set the worker to null to use the fake worker.
@@ -13,6 +13,9 @@ export const maxDuration = 60;
 
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   try {
+    // Dynamic import to prevent top-level crashes
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    
     const data = new Uint8Array(buffer);
     // @ts-ignore
     const loadingTask = (pdfjs as any).getDocument({
