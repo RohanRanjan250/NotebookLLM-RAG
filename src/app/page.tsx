@@ -55,7 +55,11 @@ export default function Home() {
         setUploadStatus({ type: "error", message: data.error || "Failed to upload file." });
       }
     } catch (error: any) {
-      setUploadStatus({ type: "error", message: "Network error. Please check your connection." });
+      console.error("Upload Error:", error);
+      setUploadStatus({ 
+        type: "error", 
+        message: `System Error: ${error.message || "Failed to contact server"}` 
+      });
     } finally {
       setIsUploading(false);
     }
