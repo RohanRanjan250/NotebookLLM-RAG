@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdf-parse"],
   // Allow network access for local testing (HMR)
   allowedDevOrigins: ['192.168.8.4'],
 };
