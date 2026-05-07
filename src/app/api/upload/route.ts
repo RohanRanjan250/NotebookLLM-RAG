@@ -3,7 +3,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
-import pdf from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 
 export const maxDuration = 60;
 
@@ -18,11 +18,17 @@ export async function POST(req: NextRequest) {
 
     let extractedText = "";
 
-    // Parse PDF or Text manually to avoid LangChain loader issues on Vercel
+    // Parse PDF or Text manually
     if (file.type === "application/pdf") {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const pdfData = await pdf(buffer);
-      extractedText = pdfData.text;
+      
+      // Use the PDFParse class correctly
+      const parser = new PDFParse({ data: buffer });
+      const result = await parser.getText();
+      extractedText = result.text;
+      
+      // Clean up parser if necessary (though it's usually GC'd)
+      await parser.destroy();
     } else if (file.type === "text/plain") {
       const buffer = await file.arrayBuffer();
       extractedText = Buffer.from(buffer).toString("utf-8");
