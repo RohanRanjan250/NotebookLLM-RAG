@@ -17,6 +17,8 @@ async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   const loadingTask = pdfjs.getDocument({
     data,
     useSystemFonts: true,
+    disableWorker: true, // Force fake worker in serverless
+    verbosity: 0,
   });
 
   const pdf = await loadingTask.promise;
