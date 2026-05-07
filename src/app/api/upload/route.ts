@@ -13,10 +13,9 @@ export const maxDuration = 60;
 
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   const data = new Uint8Array(buffer);
+  // @ts-ignore
   const loadingTask = pdfjs.getDocument({
     data,
-    useWorkerFetch: false,
-    isEvalSupported: false,
     useSystemFonts: true,
   });
 
