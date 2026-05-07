@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
-import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { Document } from "@langchain/core/documents";
+import pdf from "pdf-parse";
 
 export const maxDuration = 60;
 
@@ -16,17 +16,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    let docsToSplit: Document[] = [];
+    let extractedText = "";
 
-    // Parse PDF or Text using LangChain Document Loaders
+    // Parse PDF or Text manually to avoid LangChain loader issues on Vercel
     if (file.type === "application/pdf") {
-      // WebPDFLoader is fully compatible with Edge/Next.js (no fs/worker issues)
-      const loader = new WebPDFLoader(new Blob([await file.arrayBuffer()]));
-      docsToSplit = await loader.load();
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const pdfData = await pdf(buffer);
+      extractedText = pdfData.text;
     } else if (file.type === "text/plain") {
       const buffer = await file.arrayBuffer();
-      const text = Buffer.from(buffer).toString("utf-8");
-      docsToSplit = [new Document({ pageContent: text, metadata: { source: file.name } })];
+      extractedText = Buffer.from(buffer).toString("utf-8");
     } else {
       return NextResponse.json(
         { error: "Unsupported file type. Please upload a PDF or TXT file." },
@@ -34,9 +33,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (docsToSplit.length === 0) {
+    if (!extractedText || !extractedText.trim()) {
       return NextResponse.json({ error: "No text found in the file" }, { status: 400 });
     }
+
+    const docsToSplit = [
+      new Document({ 
+        pageContent: extractedText, 
+        metadata: { source: file.name } 
+      })
+    ];
 
     // --- CHUNKING STRATEGY ---
     const textSplitter = new RecursiveCharacterTextSplitter({
