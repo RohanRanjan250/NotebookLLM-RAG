@@ -3,9 +3,37 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { HuggingFaceInferenceEmbeddings } from "@langchain/community/embeddings/hf";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
-import { PDFParse } from "pdf-parse";
+import * as pdfjs from "pdfjs-dist";
+
+// Use the legacy build if possible for better Node support, 
+// or set the worker to null to use the fake worker.
+// pdfjs.GlobalWorkerOptions.workerSrc = false; // not needed in modern pdfjs-dist if we use it correctly
 
 export const maxDuration = 60;
+
+async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
+  const data = new Uint8Array(buffer);
+  const loadingTask = pdfjs.getDocument({
+    data,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+
+  const pdf = await loadingTask.promise;
+  let fullText = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => item.str)
+      .join(" ");
+    fullText += pageText + "\n";
+  }
+
+  return fullText;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,17 +46,9 @@ export async function POST(req: NextRequest) {
 
     let extractedText = "";
 
-    // Parse PDF or Text manually
     if (file.type === "application/pdf") {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      
-      // Use the PDFParse class correctly
-      const parser = new PDFParse({ data: buffer });
-      const result = await parser.getText();
-      extractedText = result.text;
-      
-      // Clean up parser if necessary (though it's usually GC'd)
-      await parser.destroy();
+      const arrayBuffer = await file.arrayBuffer();
+      extractedText = await extractTextFromPDF(arrayBuffer);
     } else if (file.type === "text/plain") {
       const buffer = await file.arrayBuffer();
       extractedText = Buffer.from(buffer).toString("utf-8");
@@ -50,7 +70,6 @@ export async function POST(req: NextRequest) {
       })
     ];
 
-    // --- CHUNKING STRATEGY ---
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
       chunkOverlap: 200,
@@ -58,7 +77,6 @@ export async function POST(req: NextRequest) {
 
     const docs = await textSplitter.splitDocuments(docsToSplit);
 
-    // Ensure we have API keys
     if (!process.env.HUGGINGFACEHUB_API_KEY || !process.env.QDRANT_URL || !process.env.QDRANT_API_KEY) {
       return NextResponse.json(
         { error: "Missing required API keys in environment variables (HuggingFace or Qdrant)" },
@@ -66,14 +84,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create Embeddings using HuggingFace
     const embeddings = new HuggingFaceInferenceEmbeddings({
       model: "sentence-transformers/all-MiniLM-L6-v2",
     });
 
     const collectionName = "notebooklm-rag";
 
-    // Initialize Vector Store
     await QdrantVectorStore.fromDocuments(docs, embeddings, {
       url: process.env.QDRANT_URL,
       apiKey: process.env.QDRANT_API_KEY,
