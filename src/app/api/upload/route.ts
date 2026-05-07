@@ -12,28 +12,33 @@ import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 export const maxDuration = 60;
 
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  const data = new Uint8Array(buffer);
-  // @ts-ignore
-  const loadingTask = (pdfjs as any).getDocument({
-    data,
-    useSystemFonts: true,
-    disableWorker: true, // Force fake worker in serverless
-    verbosity: 0,
-  });
+  try {
+    const data = new Uint8Array(buffer);
+    // @ts-ignore
+    const loadingTask = (pdfjs as any).getDocument({
+      data,
+      useSystemFonts: true,
+      disableWorker: true, // Force fake worker in serverless
+      verbosity: 0,
+    });
 
-  const pdf = await loadingTask.promise;
-  let fullText = "";
+    const pdf = await loadingTask.promise;
+    let fullText = "";
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item: any) => item.str)
-      .join(" ");
-    fullText += pageText + "\n";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => (item as any).str)
+        .join(" ");
+      fullText += pageText + "\n";
+    }
+
+    return fullText;
+  } catch (error: any) {
+    console.error("PDF Extraction Error:", error);
+    throw new Error(`PDF Extraction failed: ${error.message || "Unknown error"}`);
   }
-
-  return fullText;
 }
 
 export async function POST(req: NextRequest) {
